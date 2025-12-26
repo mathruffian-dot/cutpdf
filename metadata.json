@@ -1,0 +1,5 @@
+{
+  "name": "PDF 裁切工具",
+  "description": "一個簡單的網頁應用程式，可讓您上傳 PDF 文件，選擇起始和結束頁面，然後下載裁切後的新 PDF。",
+  "requestFramePermissions": []
+}
