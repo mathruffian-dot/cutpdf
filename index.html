@@ -22,9 +22,9 @@
     "rxjs/webSocket": "https://esm.sh/rxjs@^7.8.2/webSocket?conditions=es2015",
     "rxjs/testing": "https://esm.sh/rxjs@^7.8.2/testing?conditions=es2015",
     "rxjs/fetch": "https://esm.sh/rxjs@^7.8.2/fetch?conditions=es2015",
-    "@angular/compiler": "https://esm.sh/@angular/compiler@^21.0.6?external=rxjs",
-    "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^21.0.6?external=rxjs",
-    "@angular/core": "https://esm.sh/@angular/core@^21.0.6?external=rxjs"
+    "@angular/compiler": "https://esm.sh/@angular/compiler@^18.0.0?external=rxjs",
+    "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^18.0.0?external=rxjs",
+    "@angular/core": "https://esm.sh/@angular/core@^18.0.0?external=rxjs"
   }
 }
 </script>
@@ -158,7 +158,7 @@
       errorMessage = signal('');
       croppedPdfUrl = signal(null);
       
-      private async getPdfLib() {
+      async getPdfLib() {
         if (typeof PDFLib === 'undefined') {
           await new Promise((resolve, reject) => {
             const script = document.createElement('script');
@@ -275,7 +275,7 @@
         }
       }
 
-      private resetState() {
+      resetState() {
         this.pdfFile.set(null);
         this.totalPages.set(0);
         this.startPage.set(1);
