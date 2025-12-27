@@ -31,5 +31,275 @@
 </head>
 <body class="font-sans">
   <app-root></app-root>
+
+  <script type="module">
+    import '@angular/compiler';
+    import { bootstrapApplication } from '@angular/platform-browser';
+    import { Component, ChangeDetectionStrategy, signal, computed, provideZonelessChangeDetection } from '@angular/core';
+
+    // This is a dynamic import, so we declare the type to be available later.
+    // It will be loaded from a CDN at runtime.
+    declare let PDFLib: any;
+
+    @Component({
+      selector: 'app-root',
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      template: `
+<div class="flex flex-col min-h-screen">
+  <main class="flex-grow flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl space-y-6 transform transition-all hover:shadow-2xl">
+      
+      <header class="text-center">
+        <h1 class="text-4xl font-bold text-slate-800">PDF 裁切工具</h1>
+        <p class="text-slate-500 mt-2">上傳、選擇頁面、輕鬆裁切。</p>
+      </header>
+
+      @if (errorMessage()) {
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+          <p class="font-bold">錯誤</p>
+          <p>{{ errorMessage() }}</p>
+        </div>
+      }
+
+      @if (!pdfFile()) {
+        <div class="border-4 border-dashed border-slate-300 rounded-lg p-10 text-center cursor-pointer hover:border-indigo-500 hover:bg-slate-50 transition-colors">
+          <label for="pdf-upload" class="flex flex-col items-center justify-center space-y-4 cursor-pointer">
+            <svg class="w-16 h-16 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+            <span class="text-indigo-600 font-semibold">選擇一個檔案</span>
+            <span class="text-slate-500">或拖放到此處</span>
+            <input id="pdf-upload" type="file" class="hidden" (change)="onFileSelected($event)" accept="application/pdf">
+          </label>
+        </div>
+      } @else {
+        <div class="space-y-6">
+          <div class="bg-slate-50 rounded-lg p-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3 overflow-hidden">
+              <svg class="w-8 h-8 text-red-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0 0 16.5 9h-1.875a.375.375 0 0 1-.375-.375V6.75A3.75 3.75 0 0 0 10.5 3H5.625Z" />
+                  <path d="M12.971 1.816A5.23 5.23 0 0 1 15.75 3v3.75a.375.375 0 0 0 .375.375h3.75a5.23 5.23 0 0 1 1.184 2.779.375.375 0 0 1-.65.21L18.6 8.423a.375.375 0 0 0-.53 0l-3.182 3.182a.375.375 0 0 1-.53 0l-1.34-1.34a.375.375 0 0 0-.53 0l-1.424 1.424a.375.375 0 0 1-.53 0l-1.182-1.182a.375.375 0 0 0-.53 0l-1.424 1.424a.375.375 0 0 1-.53 0L3.4 12.633a.375.375 0 0 1-.21-.65A5.23 5.23 0 0 1 6 6.75h3.75a.375.375 0 0 0 .375-.375V3a5.23 5.23 0 0 1 2.779-1.184.375.375 0 0 1 .416.37Z" />
+              </svg>
+              <div class="overflow-hidden">
+                  <p class="text-slate-800 font-medium truncate" [title]="getFileName()">{{ getFileName() }}</p>
+                  <p class="text-slate-500 text-sm">總頁數: {{ totalPages() }}</p>
+              </div>
+            </div>
+            <button (click)="resetFile()" class="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="Remove file">
+              <svg class="w-6 h-6 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div>
+              <label for="startPage" class="block text-sm font-medium text-slate-700">起始頁</label>
+              <input type="number" id="startPage" [value]="startPage()" (input)="updateStartPage($event)" min="1" [max]="totalPages()" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+            <div>
+              <label for="endPage" class="block text-sm font-medium text-slate-700">結束頁</label>
+              <input type="number" id="endPage" [value]="endPage()" (input)="updateEndPage($event)" min="1" [max]="totalPages()" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+          </div>
+          
+          <button (click)="cropPdf()" [disabled]="!isFormValid() || isProcessing()" class="w-full flex justify-center items-center gap-3 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors">
+              @if(isProcessing()) {
+                  <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>處理中...</span>
+              } @else {
+                  <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m9.563 3.813 1.581 1.581m-1.581-1.581 1.581 1.581M9.563 3.813 8.019 5.36m1.544-1.547L8.019 5.36m0 0L6.475 3.813m1.544 1.547L6.475 3.813m0 0L5.031 5.36m-1.488-1.547a4.5 4.5 0 0 0-1.282 6.057l4.5 4.5 4.5-4.5a4.5 4.5 0 0 0-6.057-1.282Z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.735a4.5 4.5 0 0 1-6.057 1.282l-4.5 4.5 4.5 4.5 4.5-4.5a4.5 4.5 0 0 1 1.282-6.057M18.375 12.735l-1.581-1.581m1.581 1.581-1.581-1.581m1.581 1.581 1.544 1.547m-1.544-1.547 1.544 1.547m0 0 1.443-1.443m-1.443 1.443-1.443-1.443" />
+                  </svg>
+                  <span>裁切 PDF</span>
+              }
+          </button>
+          
+          @if (croppedPdfUrl()) {
+            <div class="bg-green-50 border-green-200 border-2 rounded-lg p-4 text-center">
+              <h3 class="font-semibold text-green-800">裁切完成！</h3>
+              <p class="text-green-600 text-sm mb-4">您的檔案已準備好下載。</p>
+              <a [href]="croppedPdfUrl()" [download]="'cropped-' + getFileName()" class="inline-flex items-center gap-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                下載已裁切的 PDF
+              </a>
+            </div>
+          }
+        </div>
+      }
+
+    </div>
+  </main>
+
+  <footer class="text-center py-6 text-slate-500 text-sm">
+    <p>
+      由 Gemini 和 AI Studio 提供支援 | 
+      <a href="https://github.com/google/labs-prototyping-project-api" target="_blank" rel="noopener noreferrer" class="font-medium text-indigo-600 hover:text-indigo-500">
+        在 GitHub 上查看原始碼
+      </a>
+    </p>
+  </footer>
+</div>
+      `,
+    })
+    class AppComponent {
+      pdfFile = signal(null);
+      totalPages = signal(0);
+      startPage = signal(1);
+      endPage = signal(1);
+      
+      isProcessing = signal(false);
+      errorMessage = signal('');
+      croppedPdfUrl = signal(null);
+      
+      private async getPdfLib() {
+        if (typeof PDFLib === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
+        return PDFLib;
+      }
+
+      isFormValid = computed(() => {
+        const start = this.startPage();
+        const end = this.endPage();
+        const total = this.totalPages();
+        return start > 0 && end >= start && end <= total && total > 0;
+      });
+      
+      async onFileSelected(event) {
+        const input = event.target;
+        if (!input.files || input.files.length === 0) {
+          return;
+        }
+
+        const file = input.files[0];
+        if (file.type !== 'application/pdf') {
+          this.errorMessage.set('請上傳一個 PDF 檔案。');
+          return;
+        }
+        
+        this.resetState();
+        this.pdfFile.set(file);
+        this.isProcessing.set(true);
+        this.errorMessage.set('');
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const { PDFDocument } = await this.getPdfLib();
+          const pdfDoc = await PDFDocument.load(arrayBuffer);
+          const pages = pdfDoc.getPageCount();
+          this.totalPages.set(pages);
+          this.startPage.set(1);
+          this.endPage.set(pages);
+        } catch (e) {
+          console.error(e);
+          this.errorMessage.set('讀取 PDF 失敗。檔案可能已損壞。');
+          this.resetState();
+        } finally {
+          this.isProcessing.set(false);
+        }
+      }
+
+      updateStartPage(event) {
+        const value = event.target.value;
+        this.startPage.set(parseInt(value, 10) || 1);
+        this.croppedPdfUrl.set(null);
+      }
+
+      updateEndPage(event) {
+        const value = event.target.value;
+        this.endPage.set(parseInt(value, 10) || 1);
+        this.croppedPdfUrl.set(null);
+      }
+
+      async cropPdf() {
+        if (!this.pdfFile() || !this.isFormValid()) {
+          return;
+        }
+
+        this.isProcessing.set(true);
+        this.errorMessage.set('');
+        this.croppedPdfUrl.set(null);
+
+        try {
+          const file = this.pdfFile();
+          const arrayBuffer = await file.arrayBuffer();
+          const { PDFDocument } = await this.getPdfLib();
+          const pdfDoc = await PDFDocument.load(arrayBuffer);
+          
+          const newPdfDoc = await PDFDocument.create();
+          const start = this.startPage() - 1;
+          const end = this.endPage();
+
+          const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+          
+          const copiedPages = await newPdfDoc.copyPages(pdfDoc, pageIndices);
+          copiedPages.forEach(page => newPdfDoc.addPage(page));
+          
+          const pdfBytes = await newPdfDoc.save();
+          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+          const currentUrl = this.croppedPdfUrl();
+          if (currentUrl) {
+              URL.revokeObjectURL(currentUrl);
+          }
+
+          const url = URL.createObjectURL(blob);
+          this.croppedPdfUrl.set(url);
+
+        } catch (e) {
+          console.error(e);
+          this.errorMessage.set('裁切 PDF 時發生錯誤。');
+        } finally {
+          this.isProcessing.set(false);
+        }
+      }
+
+      resetFile() {
+        this.resetState();
+        const fileInput = document.getElementById('pdf-upload');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+      }
+
+      private resetState() {
+        this.pdfFile.set(null);
+        this.totalPages.set(0);
+        this.startPage.set(1);
+        this.endPage.set(1);
+        this.isProcessing.set(false);
+        this.errorMessage.set('');
+        
+        const currentUrl = this.croppedPdfUrl();
+        if (currentUrl) {
+            URL.revokeObjectURL(currentUrl);
+        }
+        this.croppedPdfUrl.set(null);
+      }
+
+      getFileName() {
+        return this.pdfFile()?.name ?? 'unknown.pdf';
+      }
+    }
+
+    bootstrapApplication(AppComponent, {
+      providers: [
+        provideZonelessChangeDetection()
+      ],
+    }).catch(err => console.error(err));
+  </script>
 </body>
 </html>
